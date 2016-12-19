@@ -79,100 +79,112 @@ public static class MeshSlicer
          */
 
         //Sort middle list
-        var middleVertices = new List<Tuple<Vector3>>(middleIndices.Count);
-        var tmp = middleIndices.ConvertAll((Tuple<int> t) => new Tuple<Vector3>(vertices[t.A], vertices[t.B]));
-        middleVertices.Add(tmp[0]);
-        middleVertices.Add(tmp[1]);
-        tmp.RemoveAt(1);
-        tmp.RemoveAt(0);
-
-        int x = tmp.IndexOf(middleVertices[0]);
-        while (x != -1)
+        var middleVertices = middleIndices.ConvertAll((Tuple<int> t) => new Tuple<Vector3>(vertices[t.A], vertices[t.B]));
+        while (middleVertices.Count > 0)
         {
-            var y = x % 2 == 0 ? x + 1 : x - 1;
-            middleVertices.Insert(0, tmp[x]);
-            middleVertices.Insert(0, tmp[y]);
-            tmp.RemoveAt(Mathf.Max(x, y));
-            tmp.RemoveAt(Mathf.Min(x, y));
+            var middleVerticesPart = new List<Tuple<Vector3>>(middleIndices.Count);
+            middleVerticesPart.Add(middleVertices[0]);
+            middleVerticesPart.Add(middleVertices[1]);
+            middleVertices.RemoveAt(1);
+            middleVertices.RemoveAt(0);
 
-            x = tmp.IndexOf(middleVertices[0]);
+            int x = middleVertices.IndexOf(middleVerticesPart[0]);
+            while (x != -1)
+            {
+                var y = x % 2 == 0 ? x + 1 : x - 1;
+                middleVerticesPart.Insert(0, middleVertices[x]);
+                middleVerticesPart.Insert(0, middleVertices[y]);
+                middleVertices.RemoveAt(Mathf.Max(x, y));
+                middleVertices.RemoveAt(Mathf.Min(x, y));
+
+                x = middleVertices.IndexOf(middleVerticesPart[0]);
+            }
+
+
+            for (int i = 0; i < middleVerticesPart.Count; i++)
+            {
+                var go = new GameObject();
+                var txt = go.AddComponent<TextMesh>();
+                txt.text = i.ToString();
+                txt.fontSize = 100;
+                txt.characterSize = 0.01f;
+                var A = middleVerticesPart[i].A;
+                var B = middleVerticesPart[i].B;
+                var APos = Vector3.Dot(A, normal);
+                var BPos = Vector3.Dot(B, normal);
+                var C = A + (B - A) * (PPos - APos) / (BPos - APos);
+                go.transform.position = C;
+            }
+
+            Vector3 X;
+            if (normal.x == 0) //X == 0
+            {
+                X = new Vector3(1, normal.y, normal.z);
+            }
+            else if (normal.y == 0) //Y == 0
+            {
+                X = new Vector3(normal.x, 1, normal.z);
+            }
+            else if (normal.z == 0) //Z == 0
+            {
+                X = new Vector3(normal.x, normal.y, 1);
+            }
+            else
+            {
+                X = new Vector3(normal.x, -normal.y, 0);
+            }
+            X = X - normal * Vector3.Dot(X, normal);
+            var Y = Vector3.Cross(normal, X);
+
+            X.Normalize();
+            Y.Normalize();
+
+            var vertices2D = new Vector2[middleVerticesPart.Count];
+            for (int i = 0; i < middleVerticesPart.Count; i++)
+            {
+                var A = middleVerticesPart[i].A;
+                var B = middleVerticesPart[i].B;
+                var APos = Vector3.Dot(A, normal);
+                var BPos = Vector3.Dot(B, normal);
+                var C = A + (B - A) * (PPos - APos) / (BPos - APos);
+                vertices2D[i] = new Vector2(Vector3.Dot(C - point, X), Vector3.Dot(C - point, Y));
+            }
+            //Debug.Log(string.Join("::", new List<Vector2>(vertices2D).ConvertAll((Vector2 i) => i.ToString()).ToArray()));
+
+            List<Triangle> trigs;
+            try
+            {
+                var polygon = new Polygon(vertices2D);
+                trigs = polygon.Triangulate();
+            }
+            catch (IndexOutOfRangeException)
+            {
+                Debug.Log("Error during triangulation");
+                trigs = new List<Triangle>();
+            }
+            //Debug.Log(string.Join("::", trigs.ConvertAll(
+            //    (Triangle i) => string.Join(",", new List<Vector2>(i.Points).ConvertAll((Vector2 v) => v.ToString()).ToArray())
+            //    ).ToArray()));
+
+            Func<Vector2, Vector3> extract = (Vector2 v) => v.x * X + v.y * Y + point;
+
+            for (int i = 0; i < trigs.Count; i++)
+            {
+                triangles1.Add(vertices1.Count);
+                vertices1.Add(extract(trigs[i].Points[2]));
+                triangles1.Add(vertices1.Count);
+                vertices1.Add(extract(trigs[i].Points[1]));
+                triangles1.Add(vertices1.Count);
+                vertices1.Add(extract(trigs[i].Points[0]));
+
+                triangles2.Add(vertices2.Count);
+                vertices2.Add(extract(trigs[i].Points[0]));
+                triangles2.Add(vertices2.Count);
+                vertices2.Add(extract(trigs[i].Points[1]));
+                triangles2.Add(vertices2.Count);
+                vertices2.Add(extract(trigs[i].Points[2]));
+            }
         }
-
-
-        for (int i = 0; i < middleVertices.Count; i++)
-        {
-            var go = new GameObject();
-            var txt = go.AddComponent<TextMesh>();
-            txt.text = i.ToString();
-            txt.fontSize = 100;
-            txt.characterSize = 0.01f;
-            var A = middleVertices[i].A;
-            var B = middleVertices[i].B;
-            var APos = Vector3.Dot(A, normal);
-            var BPos = Vector3.Dot(B, normal);
-            var C = A + (B - A) * (PPos - APos) / (BPos - APos);
-            go.transform.position = C;
-        }
-
-        Vector3 X;
-        if (normal.x == 0) //X == 0
-        {
-            X = new Vector3(1, normal.y, normal.z);
-        }
-        else if (normal.y == 0) //Y == 0
-        {
-            X = new Vector3(normal.x, 1, normal.z);
-        }
-        else if (normal.z == 0) //Z == 0
-        {
-            X = new Vector3(normal.x, normal.y, 1);
-        }
-        else
-        {
-            X = new Vector3(normal.x, -normal.y, 0);
-        }
-        X = X - normal * Vector3.Dot(X, normal);
-        var Y = Vector3.Cross(normal, X);
-
-        X.Normalize();
-        Y.Normalize();
-
-        var vertices2D = new Vector2[middleVertices.Count];
-        for (int i = 0; i < middleVertices.Count; i++)
-        {
-            var A = middleVertices[i].A;
-            var B = middleVertices[i].B;
-            var APos = Vector3.Dot(A, normal);
-            var BPos = Vector3.Dot(B, normal);
-            var C = A + (B - A) * (PPos - APos) / (BPos - APos);
-            vertices2D[i] = new Vector2(Vector3.Dot(C - point, X), Vector3.Dot(C - point, Y));
-        }
-        Debug.Log(string.Join("::", new List<Vector2>(vertices2D).ConvertAll((Vector2 i) => i.ToString()).ToArray()));
-        var polygon = new Polygon(vertices2D);
-        var trigs = polygon.Triangulate();
-        Debug.Log(string.Join("::", trigs.ConvertAll(
-            (Triangle i) => string.Join(",", new List<Vector2>(i.Points).ConvertAll((Vector2 v) => v.ToString()).ToArray())
-            ).ToArray()));
-
-        Func<Vector2, Vector3> extract = (Vector2 v) => v.x * X + v.y * Y + point;
-
-        for (int i = 0; i < trigs.Count; i++)
-        {
-            triangles1.Add(vertices1.Count);
-            vertices1.Add(extract(trigs[i].Points[2]));
-            triangles1.Add(vertices1.Count);
-            vertices1.Add(extract(trigs[i].Points[1]));
-            triangles1.Add(vertices1.Count);
-            vertices1.Add(extract(trigs[i].Points[0]));
-
-            triangles2.Add(vertices2.Count);
-            vertices2.Add(extract(trigs[i].Points[0]));
-            triangles2.Add(vertices2.Count);
-            vertices2.Add(extract(trigs[i].Points[1]));
-            triangles2.Add(vertices2.Count);
-            vertices2.Add(extract(trigs[i].Points[2]));
-        }
-
         /*
          * Create sliced mesh
          */
