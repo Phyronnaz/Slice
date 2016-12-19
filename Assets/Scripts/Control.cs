@@ -14,6 +14,11 @@ public class Control : MonoBehaviour
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out hit, 1000000))
             {
+                Material1 = new Material(Material1);
+                Material2 = new Material(Material2);
+                Material1.color = Random.ColorHSV();
+                Material2.color = Random.ColorHSV();
+
                 var mesh = hit.transform.gameObject.GetComponent<MeshFilter>().mesh;
                 var material = hit.transform.gameObject.GetComponent<MeshRenderer>().material;
 
@@ -22,11 +27,13 @@ public class Control : MonoBehaviour
                 var go1 = new GameObject();
                 go1.transform.position = hit.transform.position;
                 go1.AddComponent<MeshFilter>().mesh = slicedMesh.Mesh1;
+                go1.AddComponent<MeshCollider>().sharedMesh = slicedMesh.Mesh1;
                 go1.AddComponent<MeshRenderer>().material = Material1;
 
                 var go2 = new GameObject();
                 go2.transform.position = hit.transform.position;
                 go2.AddComponent<MeshFilter>().mesh = slicedMesh.Mesh2;
+                go2.AddComponent<MeshCollider>().sharedMesh = slicedMesh.Mesh2;
                 go2.AddComponent<MeshRenderer>().material = Material2;
 
                 Destroy(hit.transform.gameObject);
