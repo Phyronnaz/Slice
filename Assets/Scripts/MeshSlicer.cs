@@ -1,32 +1,61 @@
 ﻿using UnityEngine;
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 
 public static class MeshSlicer
 {
     public static SlicedMesh Slice(Mesh mesh, Vector3 normal, Vector3 point)
     {
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
+
         normal.Normalize();
+
+        /*
+         * Create arrays
+         */
         var triangles = mesh.triangles;
         var triangles1 = new List<int>(triangles.Length);
         var triangles2 = new List<int>(triangles.Length);
 
         var vertices = mesh.vertices;
+        var vertices1Map = new int[vertices.Length]; // 1 -> 0 because 0 default value
+        var vertices2Map = new int[vertices.Length];
         var vertices1 = new List<Vector3>(vertices.Length);
         var vertices2 = new List<Vector3>(vertices.Length);
 
-
         var middleIndices = new List<Tuple<int>>();
-
-        vertices1.AddRange(vertices);
-        vertices2.AddRange(vertices);
-
-        Debug.Log(vertices.Length);
-        Debug.Log(string.Join("::", vertices1.ConvertAll((Vector3 i) => i.ToString()).ToArray()));
 
         var PPos = Vector3.Dot(point, normal);
 
         Func<Vector3, bool> Side = (Vector3 v) => Vector3.Dot(v, normal) > PPos;
+        Func<int, int> GetVertice1 = (int i) =>
+        {
+            if (vertices1Map[i] == 0)
+            {
+                vertices1.Add(Vector3.zero);
+                vertices1Map[i] = vertices1.Count;
+                return vertices1.Count - 1;
+            }
+            else
+            {
+                return vertices1Map[i] - 1;
+            }
+        };
+        Func<int, int> GetVertice2 = (int i) =>
+        {
+            if (vertices2Map[i] == 0)
+            {
+                vertices2.Add(Vector3.zero);
+                vertices2Map[i] = vertices2.Count;
+                return vertices2.Count - 1;
+            }
+            else
+            {
+                return vertices2Map[i] - 1;
+            }
+        };
 
         /*
          * Create triangles
@@ -47,39 +76,51 @@ public static class MeshSlicer
 
             if (aSide && bSide && cSide) //All on side 1
             {
-                triangles1.Add(a);
-                triangles1.Add(b);
-                triangles1.Add(c);
+                var a1 = GetVertice1(a);
+                var b1 = GetVertice1(b);
+                var c1 = GetVertice1(c);
+                vertices1[a1] = A;
+                vertices1[b1] = B;
+                vertices1[c1] = C;
+                triangles1.Add(a1);
+                triangles1.Add(b1);
+                triangles1.Add(c1);
             }
             else if (!aSide && !bSide && !cSide) //All on side 2 
             {
-                triangles2.Add(a);
-                triangles2.Add(b);
-                triangles2.Add(c);
+                var a2 = GetVertice2(a);
+                var b2 = GetVertice2(b);
+                var c2 = GetVertice2(c);
+                vertices2[a2] = A;
+                vertices2[b2] = B;
+                vertices2[c2] = C;
+                triangles2.Add(a2);
+                triangles2.Add(b2);
+                triangles2.Add(c2);
             }
             else
             {
                 if (aSide && bSide || !aSide && !bSide) //A && B same side
                 {
-                    Process(a, b, c, normal, point, Side, vertices, vertices1, vertices2, triangles1, triangles2, middleIndices);
+                    Process(a, b, c, normal, point, Side, vertices, vertices1, vertices2, triangles1, triangles2, middleIndices, GetVertice1, GetVertice2);
                 }
                 else if (bSide && cSide || !bSide && !cSide) //B && C same side
                 {
-                    Process(b, c, a, normal, point, Side, vertices, vertices1, vertices2, triangles1, triangles2, middleIndices);
+                    Process(b, c, a, normal, point, Side, vertices, vertices1, vertices2, triangles1, triangles2, middleIndices, GetVertice1, GetVertice2);
                 }
                 else if (aSide && cSide || !aSide && !cSide) //C && A same side
                 {
-                    Process(c, a, b, normal, point, Side, vertices, vertices1, vertices2, triangles1, triangles2, middleIndices);
+                    Process(c, a, b, normal, point, Side, vertices, vertices1, vertices2, triangles1, triangles2, middleIndices, GetVertice1, GetVertice2);
                 }
             }
         }
 
         /*
-         * Middle
+         * Sort middle list
          */
 
-        //Sort middle list
         var middleVertices = middleIndices.ConvertAll((Tuple<int> t) => new Tuple<Vector3>(vertices[t.A], vertices[t.B]));
+        //Process all different polygons of the middle
         while (middleVertices.Count > 0)
         {
             var middleVerticesPart = new List<Tuple<Vector3>>(middleIndices.Count);
@@ -101,21 +142,24 @@ public static class MeshSlicer
             }
 
 
-            for (int i = 0; i < middleVerticesPart.Count; i++)
-            {
-                var go = new GameObject();
-                var txt = go.AddComponent<TextMesh>();
-                txt.text = i.ToString();
-                txt.fontSize = 100;
-                txt.characterSize = 0.01f;
-                var A = middleVerticesPart[i].A;
-                var B = middleVerticesPart[i].B;
-                var APos = Vector3.Dot(A, normal);
-                var BPos = Vector3.Dot(B, normal);
-                var C = A + (B - A) * (PPos - APos) / (BPos - APos);
-                go.transform.position = C;
-            }
+            //for (int i = 0; i < middleVerticesPart.Count; i++)
+            //{
+            //    var go = new GameObject();
+            //    var txt = go.AddComponent<TextMesh>();
+            //    txt.text = i.ToString();
+            //    txt.fontSize = 100;
+            //    txt.characterSize = 0.01f;
+            //    var A = middleVerticesPart[i].A;
+            //    var B = middleVerticesPart[i].B;
+            //    var APos = Vector3.Dot(A, normal);
+            //    var BPos = Vector3.Dot(B, normal);
+            //    var C = A + (B - A) * (PPos - APos) / (BPos - APos);
+            //    go.transform.position = C;
+            //}
 
+            /*
+             * Find an orthonormal base
+             */
             Vector3 X;
             if (normal.x == 0) //X == 0
             {
@@ -139,6 +183,9 @@ public static class MeshSlicer
             X.Normalize();
             Y.Normalize();
 
+            /*
+             * Convert 3D vertices to 2D ones
+             */
             var vertices2D = new Vector2[middleVerticesPart.Count];
             for (int i = 0; i < middleVerticesPart.Count; i++)
             {
@@ -149,25 +196,23 @@ public static class MeshSlicer
                 var C = A + (B - A) * (PPos - APos) / (BPos - APos);
                 vertices2D[i] = new Vector2(Vector3.Dot(C - point, X), Vector3.Dot(C - point, Y));
             }
-            //Debug.Log(string.Join("::", new List<Vector2>(vertices2D).ConvertAll((Vector2 i) => i.ToString()).ToArray()));
 
+            /*
+             * Try to triangulate middle vertices
+             */
             List<Triangle> trigs;
             try
             {
                 var polygon = new Polygon(vertices2D);
                 trigs = polygon.Triangulate();
             }
-            catch (IndexOutOfRangeException)
+            catch (Exception e)
             {
-                Debug.Log("Error during triangulation");
+                UnityEngine.Debug.Log("Error during triangulation: " + e.Message);
                 trigs = new List<Triangle>();
             }
-            //Debug.Log(string.Join("::", trigs.ConvertAll(
-            //    (Triangle i) => string.Join(",", new List<Vector2>(i.Points).ConvertAll((Vector2 v) => v.ToString()).ToArray())
-            //    ).ToArray()));
 
             Func<Vector2, Vector3> extract = (Vector2 v) => v.x * X + v.y * Y + point;
-
             for (int i = 0; i < trigs.Count; i++)
             {
                 triangles1.Add(vertices1.Count);
@@ -185,11 +230,14 @@ public static class MeshSlicer
                 vertices2.Add(extract(trigs[i].Points[2]));
             }
         }
+
         /*
          * Create sliced mesh
          */
         var mesh1 = new Mesh();
         var mesh2 = new Mesh();
+        UnityEngine.Debug.Log("Vertices 1: " + vertices1.Count.ToString() + "; Vertices 2: " + vertices2.Count.ToString() + "; Vertices: " + vertices.Length.ToString());
+
         mesh1.vertices = vertices1.ToArray();
         mesh1.triangles = triangles1.ToArray();
         mesh1.RecalculateNormals();
@@ -204,11 +252,12 @@ public static class MeshSlicer
      * A && B same side
      */
     private static void Process(int a, int b, int c, Vector3 normal, Vector3 point, Func<Vector3, bool> Side, Vector3[] vertices,
-        List<Vector3> vertices1, List<Vector3> vertices2, List<int> triangles1, List<int> triangles2, List<Tuple<int>> middle)
+        List<Vector3> vertices1, List<Vector3> vertices2, List<int> triangles1, List<int> triangles2, List<Tuple<int>> middle,
+         Func<int, int> getVertices1, Func<int, int> getVertices2)
     {
         if (!(Side(vertices[a]) && Side(vertices[b]) || !Side(vertices[a]) && !Side(vertices[b])))
         {
-            Debug.LogError("A && B not the same side!");
+            UnityEngine.Debug.LogError("A && B not the same side!");
         }
 
         var aSide = Side(vertices[a]);
@@ -230,7 +279,18 @@ public static class MeshSlicer
         var trig2 = !aSide ? triangles1 : triangles2; //C trigs
         var vert1 = aSide ? vertices1 : vertices2; //A && B verts
         var vert2 = !aSide ? vertices1 : vertices2; //C verts
+        var getVert1 = aSide ? getVertices1 : getVertices2;
+        var getVert2 = !aSide ? getVertices1 : getVertices2;
 
+        //A
+        var a1 = getVert1(a);
+        vert1[a1] = A;
+        //B
+        var b1 = getVert1(b);
+        vert1[b1] = B;
+        //C
+        var c2 = getVert2(c);
+        vert2[c2] = C;
         //D
         var d1 = vert1.Count;
         vert1.Add(D);
@@ -249,7 +309,7 @@ public static class MeshSlicer
          * Side 1
          */
         //ADF
-        trig1.Add(a);
+        trig1.Add(a1);
         trig1.Add(d1);
         trig1.Add(f1);
         //DEF
@@ -258,7 +318,7 @@ public static class MeshSlicer
         trig1.Add(f1);
         //DBE
         trig1.Add(d1);
-        trig1.Add(b);
+        trig1.Add(b1);
         trig1.Add(e1);
         /*
          * Side 2
@@ -266,7 +326,7 @@ public static class MeshSlicer
         //FEC
         trig2.Add(f2);
         trig2.Add(e2);
-        trig2.Add(c);
+        trig2.Add(c2);
 
         middle.Add(new Tuple<int>(b, c));
         middle.Add(new Tuple<int>(c, a));

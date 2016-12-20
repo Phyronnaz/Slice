@@ -254,7 +254,7 @@ public class Polygon
 
         // We should never get here because there should
         // always be at least two ears.
-        Debug.Assert(false);
+        throw new Exception("Triangulation failed!");
     }
 
     // Return true if the three points form an ear.
