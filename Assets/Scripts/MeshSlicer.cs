@@ -119,43 +119,50 @@ public static class MeshSlicer
          * Sort middle list
          */
 
-        var middleVertices = middleIndices.ConvertAll((Tuple<int> t) => new Tuple<Vector3>(vertices[t.A], vertices[t.B]));
+
+        var middleVertices = middleIndices.ConvertAll((Tuple<int> t) => new TupleVector3(vertices[t.A], vertices[t.B]));
+        UnityEngine.Debug.Log(string.Join("\n", new List<TupleVector3>(middleVertices).ConvertAll((TupleVector3 i) => i.ToString()).ToArray()));
         //Process all different polygons of the middle
         while (middleVertices.Count > 0)
         {
-            var middleVerticesPart = new List<Tuple<Vector3>>(middleIndices.Count);
+            var middleVerticesPart = new List<TupleVector3>(middleIndices.Count);
             middleVerticesPart.Add(middleVertices[0]);
             middleVerticesPart.Add(middleVertices[1]);
             middleVertices.RemoveAt(1);
             middleVertices.RemoveAt(0);
 
             int x = middleVertices.IndexOf(middleVerticesPart[0]);
+            bool end = false;
             while (x != -1)
             {
                 var y = x % 2 == 0 ? x + 1 : x - 1;
-                middleVerticesPart.Insert(0, middleVertices[x]);
                 middleVerticesPart.Insert(0, middleVertices[y]);
                 middleVertices.RemoveAt(Mathf.Max(x, y));
                 middleVertices.RemoveAt(Mathf.Min(x, y));
 
-                x = middleVertices.IndexOf(middleVerticesPart[0]);
+                x = middleVertices.IndexOf(middleVerticesPart[end ? middleVerticesPart.Count - 1 : 0]);
+                end = false;
+                if (x == -1)
+                {
+                    x = middleVertices.IndexOf(middleVerticesPart[middleVerticesPart.Count - 1]);
+                    end = true;
+                }
             }
 
-
-            //for (int i = 0; i < middleVerticesPart.Count; i++)
-            //{
-            //    var go = new GameObject();
-            //    var txt = go.AddComponent<TextMesh>();
-            //    txt.text = i.ToString();
-            //    txt.fontSize = 100;
-            //    txt.characterSize = 0.01f;
-            //    var A = middleVerticesPart[i].A;
-            //    var B = middleVerticesPart[i].B;
-            //    var APos = Vector3.Dot(A, normal);
-            //    var BPos = Vector3.Dot(B, normal);
-            //    var C = A + (B - A) * (PPos - APos) / (BPos - APos);
-            //    go.transform.position = C;
-            //}
+            for (int i = 0; i < middleVerticesPart.Count; i++)
+            {
+                var go = new GameObject();
+                var txt = go.AddComponent<TextMesh>();
+                txt.text = i.ToString();
+                txt.fontSize = 100;
+                txt.characterSize = 0.001f;
+                var A = middleVerticesPart[i].A;
+                var B = middleVerticesPart[i].B;
+                var APos = Vector3.Dot(A, normal);
+                var BPos = Vector3.Dot(B, normal);
+                var C = A + (B - A) * (PPos - APos) / (BPos - APos);
+                go.transform.position = C + Control.Position;
+            }
 
             /*
              * Find an orthonormal base
@@ -342,54 +349,5 @@ public struct SlicedMesh
     {
         Mesh1 = mesh1;
         Mesh2 = mesh2;
-    }
-}
-
-public struct Tuple<T>
-{
-    public T A;
-    public T B;
-
-    public Tuple(T a, T b)
-    {
-        A = a;
-        B = b;
-    }
-
-    public override string ToString()
-    {
-        return A.ToString() + ", " + B.ToString();
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (obj is Tuple<T>)
-        {
-            var b = (Tuple<T>)obj;
-            return (A.Equals(b.A) && B.Equals(b.B)) || (A.Equals(b.B) && B.Equals(b.A));
-        }
-        else
-        {
-            return base.Equals(obj);
-        }
-    }
-
-    public override int GetHashCode()
-    {
-        return A.GetHashCode() + B.GetHashCode();
-    }
-
-    public bool IsNear(Tuple<T> t)
-    {
-        return A.Equals(t.A) || B.Equals(t.A) || A.Equals(t.B) || B.Equals(t.B);
-    }
-
-    public static bool operator ==(Tuple<T> a, Tuple<T> b)
-    {
-        return a.Equals(b);
-    }
-    public static bool operator !=(Tuple<T> a, Tuple<T> b)
-    {
-        return !a.Equals(b);
     }
 }
